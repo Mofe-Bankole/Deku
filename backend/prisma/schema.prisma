@@ -1,0 +1,143 @@
+// Prisma schema for Deku backend
+// Reflects PRD entities: users (profiles), markets, positions, reputation events, leaderboards.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  address      String   @unique
+  displayName  String?
+  bio          String?
+  avatarUrl    String?
+
+  // Aggregated stats
+  accuracy     Float    @default(0)
+  realizedPnl  Float    @default(0)
+  marketsPlayed Int     @default(0)
+
+  followers    Follower[] @relation("Followers_followed")
+  following    Follower[] @relation("Followers_follower")
+
+  positions    Position[]
+  markets      Market[]    @relation("CreatorMarkets")
+  reputationEvents ReputationEvent[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Follower {
+  id         String   @id @default(uuid())
+  follower   User     @relation("Followers_follower", fields: [followerId], references: [id])
+  followerId String
+
+  followed   User     @relation("Followers_followed", fields: [followedId], references: [id])
+  followedId String
+
+  createdAt  DateTime @default(now())
+
+  @@unique([followerId, followedId])
+}
+
+model Market {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  title       String
+  description String
+
+  resolutionRules String
+  expiry      DateTime
+
+  // On-chain identifiers
+  programId   String?
+  marketPda   String?
+
+  // Pools on-chain but mirrored here for indexing
+  yesPool     Float    @default(0)
+  noPool      Float    @default(0)
+
+  status      MarketStatus @default(OPEN)
+  outcome     Outcome?
+
+  creator     User?    @relation("CreatorMarkets", fields: [creatorId], references: [id])
+  creatorId   String?
+
+  positions   Position[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, expiry])
+}
+
+model Position {
+  id          String   @id @default(uuid())
+
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+
+  market      Market   @relation(fields: [marketId], references: [id])
+  marketId    String
+
+  side        Outcome
+  size        Float    // notional amount in quote token
+
+  entryPrice  Float
+  currentPrice Float   @default(0)
+
+  realizedPnl Float    @default(0)
+  unrealizedPnl Float  @default(0)
+
+  status      PositionStatus @default(OPEN)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, marketId])
+}
+
+model ReputationEvent {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+
+  label     String
+  detail    String
+  date      DateTime
+
+  result    ReputationResult
+  impactAccuracy Float
+  impactPnl      Float
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+enum MarketStatus {
+  OPEN
+  RESOLVED
+  CANCELLED
+}
+
+enum PositionStatus {
+  OPEN
+  CLOSED
+}
+
+enum Outcome {
+  YES
+  NO
+}
+
+enum ReputationResult {
+  WIN
+  LOSS
+}

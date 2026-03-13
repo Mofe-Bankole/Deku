@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  api:
+    build: .
+    container_name: deku-api
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    command: ["npm", "run", "start"]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: deku-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deku
+      POSTGRES_PASSWORD: deku_password
+      POSTGRES_DB: deku
+    ports:
+      - "5432:5432"
+    volumes:
+      - deku-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deku"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: deku-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - deku-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  deku-postgres-data:
+  deku-redis-data:
